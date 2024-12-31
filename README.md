@@ -14,4 +14,3 @@ This project is a simple **Restaurant Management System** built using **React.js
 - **Backend**: Node.js (Express)
 - **Database**: MySQL
 
-https://github.com/your-username/restaurant-management-system.git
