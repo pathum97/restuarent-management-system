@@ -1,119 +1,131 @@
-import express from "express";
-import cors from "cors";
-import mysql from "mysql2";
+import express, { json } from 'express';
+import { createConnection } from 'mysql2';
+import cors from 'cors';
 
 const app = express();
+const port = 8081;
 
-app.use(express.json());
+// Enable CORS
 app.use(cors());
 
-const db = mysql.createConnection({
-    host: "localhost",
-    user: "root",
-    password: "",
-    database: "restaurent_db",
+// Middleware to parse JSON data
+app.use(json());
+
+// Database connection setup
+const db = createConnection({
+    host: 'localhost',
+    user: 'root', 
+    password: '', 
+    database: 'restaurent_db', 
 });
 
-// Fetch all data for the main page
-app.get("/", (req, res) => {
-    const sqlDishes = "SELECT * FROM dishes";
-    const sqlCustomers = "SELECT * FROM customers";
-    const sqlOrders = "SELECT * FROM orders";
+// Connect to MySQL
+db.connect((err) => {
+    if (err) {
+        console.error('Could not connect to database:', err);
+        return;
+    }
+    console.log('Connected to the MySQL database!');
+});
 
-    db.query(sqlDishes, (err, dishes) => {
-        if (err) return res.json({ error: "Error fetching dishes" });
+// Fetch data for orders and dishes
+app.get('/', (req, res) => {
+    const query = `
+        SELECT 
+            orders.id AS order_id, 
+            orders.customer_name, 
+            orders.customer_phone, 
+            dishes.name AS dish_name, 
+            orders.quantity, 
+            orders.total_price 
+        FROM orders 
+        JOIN dishes ON orders.dish_id = dishes.id;
+    `;
 
-        db.query(sqlCustomers, (err, customers) => {
-            if (err) return res.json({ error: "Error fetching customers" });
+    db.query(query, (err, orders) => {
+        if (err) {
+            console.log("Error fetching orders:", err);
+            return res.status(500).send("Error fetching orders");
+        }
 
-            db.query(sqlOrders, (err, orders) => {
-                if (err) return res.json({ error: "Error fetching orders" });
+        db.query('SELECT * FROM dishes', (err, dishes) => {
+            if (err) {
+                console.log("Error fetching dishes:", err);
+                return res.status(500).send("Error fetching dishes");
+            }
 
-                return res.json({ dishes, customers, orders });
-            });
+            res.json({ orders, dishes });
         });
     });
 });
 
-// Add a new dish
-app.post("/add-dish", (req, res) => {
-    const sql = "INSERT INTO dishes (name, price, availability) VALUES (?, ?, ?)";
-    const values = [req.body.name, req.body.price, req.body.availability];
-
-    db.query(sql, values, (err, data) => {
-        if (err) return res.json({ error: "Error adding dish" });
-        return res.status(201).json(data);
+// Add new dish
+app.post('/add-dish', (req, res) => {
+    const { name, price, availability } = req.body;
+    const query = 'INSERT INTO dishes (name, price, availability) VALUES (?, ?, ?)';
+    db.query(query, [name, price, availability], (err, result) => {
+        if (err) {
+            console.log("Error adding dish:", err);
+            return res.status(500).send("Error adding dish");
+        }
+        res.send("Dish added successfully!");
     });
 });
 
-// Add a new customer
-app.post("/add-customer", (req, res) => {
-    const sql = "INSERT INTO customers (name, email, phone) VALUES (?, ?, ?)";
-    const values = [req.body.name, req.body.email, req.body.phone];
-
-    db.query(sql, values, (err, data) => {
-        if (err) return res.json({ error: "Error adding customer" });
-        return res.status(201).json(data);
+// Update dish
+app.put('/update-dish/:id', (req, res) => {
+    const { id } = req.params;
+    const { name, price, availability } = req.body;
+    const query = 'UPDATE dishes SET name = ?, price = ?, availability = ? WHERE id = ?';
+    db.query(query, [name, price, availability, id], (err, result) => {
+        if (err) {
+            console.log("Error updating dish:", err);
+            return res.status(500).send("Error updating dish");
+        }
+        res.send("Dish updated successfully!");
     });
 });
 
-// Add a new order
-app.post("/add-order", (req, res) => {
-    const sql = "INSERT INTO orders (customer_name, dish_name, quantity, price) VALUES (?, ?, ?, ?)";
-    const values = [
-        req.body.customer_name,
-        req.body.dish_name,
-        req.body.quantity,
-        req.body.price,
-    ];
-
-    db.query(sql, values, (err, data) => {
-        if (err) return res.json({ error: "Error adding order" });
-        return res.status(201).json(data);
+// Delete dish
+app.delete('/delete-dish/:id', (req, res) => {
+    const { id } = req.params;
+    const query = 'DELETE FROM dishes WHERE id = ?';
+    db.query(query, [id], (err, result) => {
+        if (err) {
+            console.log("Error deleting dish:", err);
+            return res.status(500).send("Error deleting dish");
+        }
+        res.send("Dish deleted successfully!");
     });
 });
 
-// Update a dish
-app.put("/update-dish/:id", (req, res) => {
-    const sql = "UPDATE dishes SET name = ?, price = ?, availability = ? WHERE id = ?";
-    const values = [req.body.name, req.body.price, req.body.availability, req.params.id];
-
-    db.query(sql, values, (err, data) => {
-        if (err) return res.json({ error: "Error updating dish" });
-        return res.status(200).json(data);
+// Add new order
+app.post('/add-order', (req, res) => {
+    const { customer_name, customer_phone, dish_id, quantity, total_price } = req.body;
+    const query = 'INSERT INTO orders (customer_name, customer_phone, dish_id, quantity, total_price) VALUES (?, ?, ?, ?, ?)';
+    db.query(query, [customer_name, customer_phone, dish_id, quantity, total_price], (err, result) => {
+        if (err) {
+            console.log("Error adding order:", err);
+            return res.status(500).send("Error adding order");
+        }
+        res.send("Order added successfully!");
     });
 });
 
-// Delete a dish
-app.delete("/delete-dish/:id", (req, res) => {
-    const sql = "DELETE FROM dishes WHERE id = ?";
-
-    db.query(sql, [req.params.id], (err, data) => {
-        if (err) return res.json({ error: "Error deleting dish" });
-        return res.status(200).json(data);
+// Delete order
+app.delete('/delete-order/:id', (req, res) => {
+    const { id } = req.params;
+    const query = 'DELETE FROM orders WHERE id = ?';
+    db.query(query, [id], (err, result) => {
+        if (err) {
+            console.log("Error deleting order:", err);
+            return res.status(500).send("Error deleting order");
+        }
+        res.send("Order deleted successfully!");
     });
 });
 
-// Delete a customer
-app.delete("/delete-customer/:id", (req, res) => {
-    const sql = "DELETE FROM customers WHERE id = ?";
-
-    db.query(sql, [req.params.id], (err, data) => {
-        if (err) return res.json({ error: "Error deleting customer" });
-        return res.status(200).json(data);
-    });
-});
-
-// Delete an order
-app.delete("/delete-order/:id", (req, res) => {
-    const sql = "DELETE FROM orders WHERE id = ?";
-
-    db.query(sql, [req.params.id], (err, data) => {
-        if (err) return res.json({ error: "Error deleting order" });
-        return res.status(200).json(data);
-    });
-});
-
-app.listen(8081, () => {
-    console.log("Server is running on port 8081");
+// Start the server
+app.listen(port, () => {
+    console.log(`Server is running on http://localhost:${port}`);
 });
